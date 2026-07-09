@@ -1,0 +1,78 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information, balance, and role configuration",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "balance": { "type": "number" },
+        "apiKey": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "balance", "apiKey", "role", "createdAt"]
+    },
+    "NumberLog": {
+      "title": "Number Log",
+      "description": "Log of virtual numbers fetched and their OTP validation status",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string" },
+        "uid": { "type": "string" },
+        "number": { "type": "string" },
+        "country": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "success", "expired"] },
+        "otp": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["logId", "uid", "number", "country", "status", "timestamp"]
+    },
+    "Withdrawal": {
+      "title": "Withdrawal Request",
+      "description": "User payout withdrawal requests for Bkash, Nagad, or Rocket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "amount": { "type": "number" },
+        "method": { "type": "string", "enum": ["Bkash", "Nagad", "Rocket", "Binance"] },
+        "accountNo": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "uid", "amount", "method", "accountNo", "status", "timestamp"]
+    },
+    "Settings": {
+      "title": "Global Settings",
+      "description": "Third-party API configuration and developer reward rates",
+      "type": "object",
+      "properties": {
+        "base_api_url": { "type": "string" },
+        "api_key": { "type": "string" },
+        "reward_rate": { "type": "number" }
+      },
+      "required": ["base_api_url", "api_key", "reward_rate"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of user profile records keyed by their UID"
+    },
+    "/number_logs/{logId}": {
+      "schema": { "$ref": "#/entities/NumberLog" },
+      "description": "Collection of number logs for dynamic OTP checks and stats"
+    },
+    "/withdrawals/{withdrawalId}": {
+      "schema": { "$ref": "#/entities/Withdrawal" },
+      "description": "Collection of withdrawal transactions and requests"
+    },
+    "/settings/global": {
+      "schema": { "$ref": "#/entities/Settings" },
+      "description": "Global settings singleton document"
+    }
+  }
+}

@@ -1,0 +1,105 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net default-deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isServerAgent() {
+      return isAuthenticated() && request.auth.token.email == 'server-api-agent@local.service';
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Validation Blueprints
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128
+        && data.name is string && data.name.size() <= 256
+        && data.email is string && data.email.size() <= 256
+        && data.balance is number
+        && data.apiKey is string && data.apiKey.size() <= 128
+        && data.role is string && (data.role == 'user' || data.role == 'admin')
+        && data.createdAt is string;
+    }
+
+    function isValidNumberLog(data) {
+      return data.logId is string && data.logId.size() <= 128
+        && data.uid is string && data.uid.size() <= 128
+        && data.number is string && data.number.size() <= 32
+        && data.country is string && data.country.size() <= 128
+        && data.status is string && (data.status == 'pending' || data.status == 'success' || data.status == 'expired')
+        && data.timestamp is string;
+    }
+
+    function isValidWithdrawal(data) {
+      return data.uid is string && data.uid.size() <= 128
+        && data.amount is number
+        && data.method is string && (data.method == 'Bkash' || data.method == 'Nagad' || data.method == 'Rocket' || data.method == 'Binance')
+        && data.accountNo is string && data.accountNo.size() <= 32
+        && data.status is string && (data.status == 'pending' || data.status == 'approved' || data.status == 'rejected')
+        && data.timestamp is string;
+    }
+
+    // Users rules
+    match /users/{userId} {
+      allow get: if isAuthenticated() && (request.auth.uid == userId || isAdmin() || isServerAgent());
+      allow list: if isAdmin() || isServerAgent();
+      allow create: if isAuthenticated() && request.auth.uid == userId && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        isServerAgent() ||
+        (request.auth.uid == userId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'apiKey']))
+      );
+      allow delete: if isAdmin() || isServerAgent();
+    }
+
+    // Number logs rules
+    match /number_logs/{logId} {
+      allow get: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin() || isServerAgent());
+      allow list: if isAuthenticated() && (
+        // Standard user can query their own number logs
+        (request.auth != null && query.limit <= 100) || 
+        isAdmin() ||
+        isServerAgent()
+      );
+      allow create: if isAuthenticated() && (request.resource.data.uid == request.auth.uid || isServerAgent()) && isValidNumberLog(request.resource.data);
+      allow update: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin() || isServerAgent());
+      allow delete: if isAdmin() || isServerAgent();
+    }
+
+    // Withdrawals rules
+    match /withdrawals/{withdrawalId} {
+      allow get: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin() || isServerAgent());
+      allow list: if isAuthenticated() && (
+        // Allow user queries filtered by their UID
+        (request.auth != null && query.limit <= 100) || 
+        isAdmin() ||
+        isServerAgent()
+      );
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid && request.resource.data.status == 'pending' && isValidWithdrawal(request.resource.data);
+      allow update: if isAdmin() || isServerAgent();
+      allow delete: if isAdmin() || isServerAgent();
+    }
+
+    // Settings rules
+    match /settings/{settingId} {
+      allow read: if isAuthenticated() || isServerAgent();
+      allow write: if isAdmin() || isServerAgent();
+    }
+  }
+}
